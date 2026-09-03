@@ -223,10 +223,17 @@
         <div class="field">
           <label for="modelSelect">Model</label>
           <select id="modelSelect">
-            <option value="Xenova/whisper-tiny.en">Tiny (EN) — cepat, ringan</option>
-            <option value="Xenova/whisper-base.en">Base (EN) — lebih akurat</option>
-            <option value="Xenova/whisper-tiny">Tiny (multibahasa)</option>
-            <option value="Xenova/whisper-base">Base (multibahasa)</option>
+            <option value="Xenova/whisper-base" selected>Base — akurasi bagus (disarankan)</option>
+            <option value="Xenova/whisper-small">Small — paling akurat, lebih berat</option>
+            <option value="Xenova/whisper-tiny">Tiny — paling cepat, kurang akurat</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="langSelect">Bahasa</label>
+          <select id="langSelect">
+            <option value="indonesian" selected>Bahasa Indonesia</option>
+            <option value="english">English</option>
+            <option value="auto">Deteksi otomatis</option>
           </select>
         </div>
         <button class="btn primary" id="generateBtn">Buat subtitle</button>
@@ -308,6 +315,7 @@ const player     = document.getElementById('player');
 const capText    = document.getElementById('capText');
 const controls   = document.getElementById('controls');
 const modelSelect= document.getElementById('modelSelect');
+const langSelect = document.getElementById('langSelect');
 const generateBtn= document.getElementById('generateBtn');
 const progressWrap = document.getElementById('progressWrap');
 const progressBar  = document.getElementById('progressBar');
@@ -494,24 +502,29 @@ generateBtn.addEventListener('click', async () => {
     const audioData = await extractAudio(currentFile);
 
     setProgress(10, 'Mentranskripsi audio — ini bisa makan waktu tergantung panjang video…');
-    const isMultilingual = !modelId.endsWith('.en');
+    const langValue = langSelect.value;
     const output = await transcriber(audioData, {
       chunk_length_s: 30,
       stride_length_s: 5,
       return_timestamps: true,
-      language: isMultilingual ? null : undefined,
+      language: langValue === 'auto' ? null : langValue,
       task: 'transcribe',
+      condition_on_previous_text: false,
+      no_repeat_ngram_size: 3,
+      repetition_penalty: 1.3,
+      temperature: 0,
     });
 
     setProgress(100, 'Selesai.');
     cues = (output.chunks || []).map(c => ({
       start: c.timestamp[0] ?? 0,
       end: c.timestamp[1] ?? (c.timestamp[0] ?? 0) + 2,
-      text: c.text.trim()
+      text: cleanHallucination(c.text.trim())
     })).filter(c => c.text.length > 0);
 
     if (cues.length === 0 && output.text){
-      cues = [{ start: 0, end: player.duration || 5, text: output.text.trim() }];
+      const cleaned = cleanHallucination(output.text.trim());
+      if (cleaned) cues = [{ start: 0, end: player.duration || 5, text: cleaned }];
     }
 
     statModel.textContent = modelId.replace('Xenova/','');
@@ -675,6 +688,18 @@ addCueBtn.addEventListener('click', () => {
 
 function escapeHtml(s){
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Collapses Whisper's occasional repetition-loop hallucinations, e.g.
+// "P P P P P P P" -> "P" or "LLLLLLLLLL" -> "L". Returns '' if the whole
+// chunk turns out to be nothing but a repeated fragment (treated as garbage).
+function cleanHallucination(text){
+  let out = text
+    .replace(/\b(\w+)(?:\s+\1\b){2,}/gi, '$1')   // repeated whole words
+    .replace(/(.)\1{4,}/g, '$1')                  // repeated single characters
+    .trim();
+  if (/^(.)\1*$/.test(out.replace(/\s+/g,''))) return ''; // just one char repeated
+  return out;
 }
 
 function formatClock(sec){
