@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subtitle Otomatis — gratis, jalan di browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=IBM+Plex+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:        #0D0F12;
+    --panel:     #15181D;
+    --panel-2:   #1C2027;
+    --line:      #262B33;
+    --text:      #ECEDEE;
+    --muted:     #8A909B;
+    --accent:    #F2C230;   /* caption-yellow, tally-light energy */
+    --accent-ink:#1A1500;
+    --good:      #4FC17E;
+    --bad:       #E5605A;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "IBM Plex Sans", "Inter", -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  body{min-height:100vh;}
+
+  @font-face{font-family:'IBM Plex Sans';src:local('IBM Plex Sans');}
+
+  a{color:inherit;}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  header.top{
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:16px; padding-bottom:22px; margin-bottom:26px; border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:baseline; gap:10px;}
+  .brand .dot{width:10px;height:10px;background:var(--accent);border-radius:50%;display:inline-block;transform:translateY(-1px);}
+  .brand h1{font-size:19px; margin:0; font-weight:600; letter-spacing:-0.01em;}
+  header.top p{margin:0; color:var(--muted); font-size:13.5px; max-width:420px; line-height:1.5;}
+
+  .grid{
+    display:grid; grid-template-columns: 1.15fr 1fr; gap:20px;
+  }
+  @media (max-width:920px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:18px; display:flex; flex-direction:column; gap:14px;
+  }
+
+  .panel h2{font-size:12.5px; text-transform:none; letter-spacing:.01em; margin:0; color:var(--muted); font-weight:500;}
+
+  /* dropzone */
+  .drop{
+    border:1.5px dashed var(--line); border-radius:8px; padding:38px 18px;
+    text-align:center; cursor:pointer; transition:border-color .15s, background .15s;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+  }
+  .drop:hover, .drop.drag{ border-color:var(--accent); background:rgba(242,194,48,0.04); }
+  .drop svg{opacity:.6;}
+  .drop .big{font-size:14.5px;}
+  .drop .small{font-size:12.5px; color:var(--muted);}
+  input[type=file]{display:none;}
+
+  video{
+    width:100%; border-radius:8px; background:#000; display:block; aspect-ratio:16/9; object-fit:contain;
+  }
+  .stage{position:relative;}
+  .cap-overlay{
+    position:absolute; left:0; right:0; bottom:6%; text-align:center; pointer-events:none;
+    padding:0 6%;
+  }
+  .cap-overlay span{
+    background:rgba(0,0,0,0.72); color:#fff; padding:5px 12px; border-radius:4px;
+    font-size:clamp(13px,2.6vw,20px); font-weight:600; line-height:1.35; display:inline-block;
+    font-family:var(--sans);
+  }
+
+  .filerow{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--muted);}
+  .filerow strong{color:var(--text); font-weight:500;}
+
+  select, .btn{
+    font-family:var(--sans); font-size:13.5px; border-radius:7px; border:1px solid var(--line);
+    background:var(--panel-2); color:var(--text); padding:9px 12px; cursor:pointer;
+  }
+  select{appearance:none; -webkit-appearance:none;}
+
+  .btn.primary{
+    background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600;
+  }
+  .btn.primary:disabled{opacity:.45; cursor:not-allowed;}
+  .btn.ghost{background:transparent;}
+  .btn:hover:not(:disabled){filter:brightness(1.08);}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+
+  .field{display:flex; flex-direction:column; gap:5px; font-size:12.5px; color:var(--muted);}
+
+  .progress-wrap{display:none; flex-direction:column; gap:6px;}
+  .progress-wrap.show{display:flex;}
+  .progress-track{height:6px; background:var(--panel-2); border-radius:3px; overflow:hidden; border:1px solid var(--line);}
+  .progress-bar{height:100%; width:0%; background:var(--accent); transition:width .25s;}
+  .progress-label{font-size:12px; color:var(--muted); font-family:var(--mono);}
+
+  /* subtitle list */
+  .sub-list{
+    display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto; padding-right:4px;
+  }
+  .sub-list::-webkit-scrollbar{width:8px;}
+  .sub-list::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+
+  .cue{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .cue.active{border-color:var(--accent);}
+  .cue-time{display:flex; gap:8px; align-items:center; font-family:var(--mono); font-size:12px; color:var(--muted);}
+  .cue-time input{
+    background:transparent; border:1px solid var(--line); border-radius:5px; color:var(--text);
+    font-family:var(--mono); font-size:12px; padding:4px 6px; width:88px;
+  }
+  .cue-time span{color:var(--muted);}
+  .cue-time button{
+    margin-left:auto; background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:16px; line-height:1;
+    padding:2px 6px;
+  }
+  .cue-time button:hover{color:var(--bad);}
+  .cue textarea{
+    background:transparent; border:none; color:var(--text); font-family:var(--sans); font-size:14px;
+    resize:vertical; min-height:38px; padding:0; outline:none;
+  }
+
+  .empty-state{
+    color:var(--muted); font-size:13.5px; text-align:center; padding:40px 10px; line-height:1.6;
+  }
+  .empty-state b{color:var(--text);}
+
+  footer.credits{margin-top:24px; font-size:12px; color:var(--muted); line-height:1.6;}
+  footer.credits code{background:var(--panel-2); padding:1px 5px; border-radius:4px; font-family:var(--mono);}
+
+  .badge{
+    font-family:var(--mono); font-size:11px; color:var(--muted); border:1px solid var(--line);
+    border-radius:5px; padding:2px 7px; display:inline-block;
+  }
+  .stat-row{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted);}
+  .stat-row b{color:var(--text); font-family:var(--mono); font-weight:500;}
+
+  /* caption style picker */
+  .style-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .style-card{
+    background:var(--panel-2); border:1.5px solid var(--line); border-radius:9px;
+    height:64px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s, transform .1s; overflow:hidden; padding:6px;
+  }
+  .style-card:hover{border-color:#3a4150;}
+  .style-card.selected{border-color:var(--accent);}
+  .style-card .preview-text{
+    max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Subtitle Otomatis</h1>
+    </div>
+    <p>Bikin subtitle dari video/audio langsung di browser kamu — pakai model speech-to-text open-source, jalan lokal, gratis, tanpa upload ke server manapun.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- LEFT: video + upload -->
+    <div class="panel">
+      <h2>1 · Video atau audio</h2>
+
+      <div class="drop" id="dropzone">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <div class="big">Taruh file di sini, atau klik untuk pilih</div>
+        <div class="small">MP4, MOV, WebM, MP3, WAV — diproses di perangkat kamu sendiri</div>
+        <input type="file" id="fileInput" accept="video/*,audio/*">
+      </div>
+
+      <div class="filerow" id="fileRow" style="display:none;">
+        <span>File: <strong id="fileName">—</strong></span>
+        <span id="fileDuration"></span>
+      </div>
+
+      <div class="stage" id="stage" style="display:none;">
+        <video id="player" controls></video>
+        <div class="cap-overlay" id="capOverlay"><span id="capText" style="display:none;"></span></div>
+      </div>
+
+      <div class="row" id="controls" style="display:none;">
+        <div class="field">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect">
+            <option value="Xenova/whisper-tiny.en">Tiny (EN) — cepat, ringan</option>
+            <option value="Xenova/whisper-base.en">Base (EN) — lebih akurat</option>
+            <option value="Xenova/whisper-tiny">Tiny (multibahasa)</option>
+            <option value="Xenova/whisper-base">Base (multibahasa)</option>
+          </select>
+        </div>
+        <button class="btn primary" id="generateBtn">Buat subtitle</button>
+      </div>
+
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="progress-label" id="progressLabel">—</div>
+      </div>
+
+      <footer class="credits">
+        Model diunduh sekali dari Hugging Face lewat CDN (butuh internet di percobaan pertama, lalu tersimpan di cache browser). Setelah itu, transkripsi berjalan 100% lokal — file kamu tidak pernah dikirim kemanapun. Untuk hasil terbaik pakai Chrome/Edge di desktop.
+      </footer>
+    </div>
+
+    <!-- RIGHT: subtitle editor -->
+    <div class="panel">
+      <h2>2 · Edit &amp; unduh subtitle</h2>
+
+      <div class="stat-row" id="statRow" style="display:none;">
+        <span>Cue: <b id="statCount">0</b></span>
+        <span>Model: <b id="statModel">—</b></span>
+      </div>
+
+      <div id="styleBlock" style="display:none; flex-direction:column; gap:10px;">
+        <h2 style="margin-top:2px;">Gaya subtitle</h2>
+        <div class="style-grid" id="styleGrid"></div>
+      </div>
+
+      <div class="sub-list" id="subList">
+        <div class="empty-state" id="emptyState">
+          Belum ada subtitle. Unggah video di panel kiri, pilih model, lalu klik <b>Buat subtitle</b>.<br><br>
+          Kamu juga bisa edit teks dan waktu tiap baris di sini setelah subtitle dibuat.
+        </div>
+      </div>
+
+      <div class="row" id="exportRow" style="display:none;">
+        <button class="btn" id="addCueBtn">+ Tambah baris</button>
+        <span style="flex:1;"></span>
+        <button class="btn" id="downloadSrt">Unduh .srt</button>
+        <button class="btn" id="downloadVtt">Unduh .vtt</button>
+      </div>
+
+      <div id="burnBlock" style="display:none;">
+        <div class="row">
+          <button class="btn primary" id="burnInBtn" style="width:100%; justify-content:center;">Render video dengan subtitle nempel (.webm)</button>
+        </div>
+        <div class="progress-wrap" id="burnProgressWrap">
+          <div class="progress-track"><div class="progress-bar" id="burnProgressBar"></div></div>
+          <div class="progress-label" id="burnProgressLabel">—</div>
+        </div>
+        <div class="small" style="color:var(--muted); font-size:12px; line-height:1.6; margin-top:2px;">
+          Ini merekam video sambil diputar (butuh waktu = durasi video), jadi biarkan tab ini terbuka sampai selesai. Paling stabil di Chrome/Edge desktop. Hasil keluar sebagai <code style="font-family:var(--mono);">.webm</code> — untuk convert ke .mp4, tinggal drag file-nya ke <a href="https://cloudconvert.com" target="_blank" style="color:var(--accent);">cloudconvert.com</a> atau import ke CapCut/editor apapun.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+env.allowLocalModels = false;
+
+const dropzone   = document.getElementById('dropzone');
+const fileInput  = document.getElementById('fileInput');
+const fileRow    = document.getElementById('fileRow');
+const fileName   = document.getElementById('fileName');
+const fileDuration = document.getElementById('fileDuration');
+const stage      = document.getElementById('stage');
+const player     = document.getElementById('player');
+const capText    = document.getElementById('capText');
+const controls   = document.getElementById('controls');
+const modelSelect= document.getElementById('modelSelect');
+const generateBtn= document.getElementById('generateBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar  = document.getElementById('progressBar');
+const progressLabel= document.getElementById('progressLabel');
+const subList    = document.getElementById('subList');
+const emptyState = document.getElementById('emptyState');
+const exportRow  = document.getElementById('exportRow');
+const statRow    = document.getElementById('statRow');
+const statCount  = document.getElementById('statCount');
+const statModel  = document.getElementById('statModel');
+const addCueBtn  = document.getElementById('addCueBtn');
+const downloadSrtBtn = document.getElementById('downloadSrt');
+const downloadVttBtn = document.getElementById('downloadVtt');
+const burnBlock  = document.getElementById('burnBlock');
+const burnInBtn  = document.getElementById('burnInBtn');
+const burnProgressWrap  = document.getElementById('burnProgressWrap');
+const burnProgressBar   = document.getElementById('burnProgressBar');
+const burnProgressLabel = document.getElementById('burnProgressLabel');
+const styleBlock = document.getElementById('styleBlock');
+const styleGrid  = document.getElementById('styleGrid');
+
+let cues = []; // {start, end, text}
+let currentFile = null;
+
+// ---------- caption style presets ----------
+const STYLE_PRESETS = [
+  { id:'simple',  label:'Simple',  fontFamily:'"IBM Plex Sans", sans-serif', weight:800, color:'#ffffff', uppercase:false, bg:false, stroke:0 },
+  { id:'classic', label:'Classic', fontFamily:'"IBM Plex Sans", sans-serif', weight:700, color:'#ffffff', uppercase:false, bg:true,  stroke:0 },
+  { id:'bangers', label:'Bangers', fontFamily:'"Bangers", cursive',          weight:400, color:'#F2C230', uppercase:true,  bg:false, stroke:3, letterSpacing:'0.5px' },
+  { id:'street',  label:'Street',  fontFamily:'"Anton", sans-serif',         weight:400, color:'#ffffff', uppercase:true,  bg:false, stroke:3, letterSpacing:'1px' },
+  { id:'beast',   label:'Beast',   fontFamily:'"Anton", sans-serif',         weight:400, color:'#F2C230', uppercase:true,  bg:false, stroke:4, letterSpacing:'1px' },
+  { id:'clean',   label:'Clean',   fontFamily:'"IBM Plex Sans", sans-serif', weight:700, color:'#ffffff', uppercase:false, bg:false, stroke:0 },
+];
+let selectedStyleId = 'classic';
+
+function getStyle(id){ return STYLE_PRESETS.find(s => s.id === id) || STYLE_PRESETS[1]; }
+
+function renderStyleGrid(){
+  styleGrid.innerHTML = '';
+  STYLE_PRESETS.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'style-card' + (s.id === selectedStyleId ? ' selected' : '');
+    card.dataset.id = s.id;
+    const span = document.createElement('span');
+    span.className = 'preview-text';
+    span.textContent = s.uppercase ? s.label.toUpperCase() : s.label;
+    span.style.fontFamily = s.fontFamily;
+    span.style.fontWeight = s.weight;
+    span.style.color = s.color;
+    span.style.letterSpacing = s.letterSpacing || 'normal';
+    span.style.fontSize = '17px';
+    if (s.stroke){
+      span.style.textShadow = [
+        '-1.5px -1.5px 0 #000','1.5px -1.5px 0 #000','-1.5px 1.5px 0 #000','1.5px 1.5px 0 #000'
+      ].join(',');
+    } else if (s.bg){
+      span.style.background = 'rgba(0,0,0,0.85)';
+      span.style.padding = '3px 10px';
+      span.style.borderRadius = '4px';
+    } else {
+      span.style.textShadow = '0 2px 6px rgba(0,0,0,.6)';
+    }
+    card.appendChild(span);
+    card.addEventListener('click', () => {
+      selectedStyleId = s.id;
+      renderStyleGrid();
+      applyOverlayStyle();
+    });
+    styleGrid.appendChild(card);
+  });
+}
+
+function applyOverlayStyle(){
+  const s = getStyle(selectedStyleId);
+  capText.style.fontFamily = s.fontFamily;
+  capText.style.fontWeight = s.weight;
+  capText.style.color = s.color;
+  capText.style.textTransform = s.uppercase ? 'uppercase' : 'none';
+  capText.style.letterSpacing = s.letterSpacing || 'normal';
+  if (s.stroke){
+    capText.style.background = 'transparent';
+    capText.style.padding = '0';
+    capText.style.textShadow = [
+      '-2px -2px 0 #000','2px -2px 0 #000','-2px 2px 0 #000','2px 2px 0 #000'
+    ].join(',');
+  } else if (s.bg){
+    capText.style.background = 'rgba(0,0,0,0.72)';
+    capText.style.padding = '5px 12px';
+    capText.style.textShadow = 'none';
+  } else {
+    capText.style.background = 'transparent';
+    capText.style.padding = '0';
+    capText.style.textShadow = '0 2px 8px rgba(0,0,0,.65)';
+  }
+}
+renderStyleGrid();
+applyOverlayStyle();
+
+// ---------- upload handling ----------
+dropzone.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.add('drag');
+}));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.remove('drag');
+}));
+dropzone.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) handleFile(f);
+});
+
+function handleFile(file){
+  currentFile = file;
+  fileName.textContent = file.name;
+  fileRow.style.display = 'flex';
+
+  const url = URL.createObjectURL(file);
+  player.src = url;
+  stage.style.display = 'block';
+  controls.style.display = 'flex';
+
+  player.onloadedmetadata = () => {
+    fileDuration.textContent = formatClock(player.duration);
+  };
+
+  cues = [];
+  renderCues();
+}
+
+player.addEventListener('timeupdate', () => {
+  const t = player.currentTime;
+  const active = cues.find(c => t >= c.start && t <= c.end);
+  if (active){
+    capText.style.display = 'inline-block';
+    capText.textContent = active.text;
+  } else {
+    capText.style.display = 'none';
+  }
+  document.querySelectorAll('.cue').forEach((el,i) => {
+    el.classList.toggle('active', cues[i] === active);
+  });
+});
+
+// ---------- transcription ----------
+generateBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  generateBtn.disabled = true;
+  progressWrap.classList.add('show');
+  setProgress(0, 'Menyiapkan model…');
+
+  try {
+    const modelId = modelSelect.value;
+
+    const transcriber = await pipeline('automatic-speech-recognition', modelId, {
+      progress_callback: (p) => {
+        if (p.status === 'progress' && p.total){
+          const pct = Math.round((p.loaded / p.total) * 100);
+          setProgress(pct, `Mengunduh model (${pct}%)…`);
+        } else if (p.status === 'ready'){
+          setProgress(100, 'Model siap.');
+        }
+      }
+    });
+
+    setProgress(0, 'Mengekstrak audio…');
+    const audioData = await extractAudio(currentFile);
+
+    setProgress(10, 'Mentranskripsi audio — ini bisa makan waktu tergantung panjang video…');
+    const isMultilingual = !modelId.endsWith('.en');
+    const output = await transcriber(audioData, {
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      return_timestamps: true,
+      language: isMultilingual ? null : undefined,
+      task: 'transcribe',
+    });
+
+    setProgress(100, 'Selesai.');
+    cues = (output.chunks || []).map(c => ({
+      start: c.timestamp[0] ?? 0,
+      end: c.timestamp[1] ?? (c.timestamp[0] ?? 0) + 2,
+      text: c.text.trim()
+    })).filter(c => c.text.length > 0);
+
+    if (cues.length === 0 && output.text){
+      cues = [{ start: 0, end: player.duration || 5, text: output.text.trim() }];
+    }
+
+    statModel.textContent = modelId.replace('Xenova/','');
+    statRow.style.display = 'flex';
+    renderCues();
+
+  } catch (err) {
+    console.error(err);
+    setProgress(0, 'Gagal: ' + (err.message || err) + ' — coba model yang lebih kecil atau file lebih pendek.');
+  } finally {
+    generateBtn.disabled = false;
+    setTimeout(() => progressWrap.classList.remove('show'), 4000);
+  }
+});
+
+function setProgress(pct, label){
+  progressBar.style.width = pct + '%';
+  progressLabel.textContent = label;
+}
+
+// Decode file audio to 16kHz mono Float32Array for Whisper
+async function extractAudio(file){
+  const arrayBuffer = await file.arrayBuffer();
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+
+  const targetRate = 16000;
+  const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetRate), targetRate);
+  const src = offline.createBufferSource();
+
+  // Downmix to mono if needed
+  let monoBuffer = decoded;
+  if (decoded.numberOfChannels > 1){
+    monoBuffer = audioCtx.createBuffer(1, decoded.length, decoded.sampleRate);
+    const out = monoBuffer.getChannelData(0);
+    for (let ch = 0; ch < decoded.numberOfChannels; ch++){
+      const data = decoded.getChannelData(ch);
+      for (let i = 0; i < data.length; i++) out[i] = (out[i] || 0) + data[i] / decoded.numberOfChannels;
+    }
+  }
+
+  src.buffer = monoBuffer;
+  src.connect(offline.destination);
+  src.start(0);
+  const rendered = await offline.startRendering();
+  return rendered.getChannelData(0);
+}
+
+// ---------- cue list rendering ----------
+function renderCues(){
+  subList.innerHTML = '';
+  if (cues.length === 0){
+    subList.appendChild(emptyState);
+    exportRow.style.display = 'none';
+    burnBlock.style.display = 'none';
+    styleBlock.style.display = 'none';
+    return;
+  }
+  exportRow.style.display = 'flex';
+  burnBlock.style.display = 'block';
+  styleBlock.style.display = 'flex';
+  statCount.textContent = cues.length;
+  statRow.style.display = 'flex';
+
+  cues.sort((a,b) => a.start - b.start);
+
+  cues.forEach((cue, idx) => {
+    const el = document.createElement('div');
+    el.className = 'cue';
+    el.innerHTML = `
+      <div class="cue-time">
+        <input type="text" value="${formatClock(cue.start)}" data-role="start" data-idx="${idx}">
+        <span>→</span>
+        <input type="text" value="${formatClock(cue.end)}" data-role="end" data-idx="${idx}">
+        <button data-role="del" data-idx="${idx}" title="Hapus baris">✕</button>
+      </div>
+      <textarea data-role="text" data-idx="${idx}" rows="2">${escapeHtml(cue.text)}</textarea>
+    `;
+    subList.appendChild(el);
+  });
+
+  subList.querySelectorAll('input[data-role="start"]').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const i = +e.target.dataset.idx;
+      const v = parseClock(e.target.value);
+      if (v !== null) cues[i].start = v;
+      renderCues();
+    });
+  });
+  subList.querySelectorAll('input[data-role="end"]').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const i = +e.target.dataset.idx;
+      const v = parseClock(e.target.value);
+      if (v !== null) cues[i].end = v;
+      renderCues();
+    });
+  });
+  subList.querySelectorAll('textarea[data-role="text"]').forEach(ta => {
+    ta.addEventListener('input', e => {
+      const i = +e.target.dataset.idx;
+      cues[i].text = e.target.value;
+    });
+  });
+  subList.querySelectorAll('button[data-role="del"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const i = +e.target.dataset.idx;
+      cues.splice(i,1);
+      renderCues();
+    });
+  });
+}
+
+addCueBtn.addEventListener('click', () => {
+  const last = cues[cues.length - 1];
+  const start = last ? last.end : 0;
+  cues.push({ start, end: start + 2, text: 'Teks baru' });
+  renderCues();
+});
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatClock(sec){
+  if (isNaN(sec)) sec = 0;
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = Math.floor(sec%60);
+  const ms = Math.round((sec - Math.floor(sec)) * 1000);
+  return `${pad(h,2)}:${pad(m,2)}:${pad(s,2)}.${pad(ms,3)}`;
+}
+function pad(n,len){ return String(n).padStart(len,'0'); }
+function parseClock(str){
+  const m = str.trim().match(/^(\d+):(\d{1,2}):(\d{1,2})(?:[.,](\d{1,3}))?$/);
+  if (!m) return null;
+  const [_, h, mi, s, ms] = m;
+  return (+h)*3600 + (+mi)*60 + (+s) + (ms ? (+ms.padEnd(3,'0'))/1000 : 0);
+}
+
+// ---------- export ----------
+function toSrt(){
+  return cues.map((c,i) => {
+    const t1 = formatClock(c.start).replace('.',',');
+    const t2 = formatClock(c.end).replace('.',',');
+    return `${i+1}\n${t1} --> ${t2}\n${c.text}\n`;
+  }).join('\n');
+}
+function toVtt(){
+  const body = cues.map((c) => {
+    const t1 = formatClock(c.start);
+    const t2 = formatClock(c.end);
+    return `${t1} --> ${t2}\n${c.text}\n`;
+  }).join('\n');
+  return `WEBVTT\n\n${body}`;
+}
+function download(filename, content, mime){
+  const blob = (content instanceof Blob) ? content : new Blob([content], { type: mime || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+downloadSrtBtn.addEventListener('click', () => download('subtitle.srt', toSrt()));
+downloadVttBtn.addEventListener('click', () => download('subtitle.vtt', toVtt()));
+
+// ---------- burn-in render (subtitle nempel ke video) ----------
+function wrapCanvasText(ctx, text, maxWidth){
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  for (const w of words){
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && line){
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawSubtitleOnCanvas(ctx, w, h, rawText, style){
+  const s = style || getStyle(selectedStyleId);
+  const text = s.uppercase ? rawText.toUpperCase() : rawText;
+
+  const fontSize = Math.max(18, Math.round(h * 0.05));
+  ctx.font = `${s.weight} ${fontSize}px ${s.fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const maxWidth = w * 0.82;
+  const lines = wrapCanvasText(ctx, text, maxWidth);
+  const lineHeight = fontSize * 1.3;
+  const padY = fontSize * 0.4;
+  const blockHeight = lines.length * lineHeight + (s.bg ? padY * 2 : 0);
+  const bottomMargin = h * 0.08;
+  const blockTop = h - bottomMargin - blockHeight;
+
+  if (s.bg){
+    let maxLineWidth = 0;
+    lines.forEach(l => { maxLineWidth = Math.max(maxLineWidth, ctx.measureText(l).width); });
+    const boxWidth = maxLineWidth + fontSize * 1.1;
+    const boxX = (w - boxWidth) / 2;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    roundRect(ctx, boxX, blockTop, boxWidth, blockHeight, 6);
+    ctx.fill();
+  }
+
+  lines.forEach((l, i) => {
+    const y = blockTop + (s.bg ? padY : 0) + lineHeight * i + lineHeight / 2;
+    if (s.stroke){
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.lineWidth = s.stroke * 2;
+      ctx.strokeStyle = '#000000';
+      ctx.strokeText(l, w / 2, y);
+    } else if (!s.bg){
+      ctx.shadowColor = 'rgba(0,0,0,0.65)';
+      ctx.shadowBlur = fontSize * 0.25;
+      ctx.shadowOffsetY = fontSize * 0.08;
+    }
+    ctx.fillStyle = s.color;
+    ctx.fillText(l, w / 2, y);
+    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+burnInBtn.addEventListener('click', async () => {
+  if (cues.length === 0) return;
+  if (typeof player.captureStream !== 'function' && typeof player.mozCaptureStream !== 'function'){
+    alert('Browser ini belum mendukung perekaman video langsung. Coba pakai Chrome atau Edge di desktop.');
+    return;
+  }
+
+  burnInBtn.disabled = true;
+  burnProgressWrap.classList.add('show');
+  burnProgressBar.style.width = '0%';
+  burnProgressLabel.textContent = 'Menyiapkan font & perekaman…';
+
+  const activeStyle = getStyle(selectedStyleId);
+  try {
+    await Promise.all([
+      document.fonts.load(`${activeStyle.weight} 40px "Bangers"`),
+      document.fonts.load(`${activeStyle.weight} 40px "Anton"`),
+      document.fonts.load(`${activeStyle.weight} 40px "IBM Plex Sans"`),
+    ]);
+  } catch (e) { /* fonts may already be loaded or unavailable, continue anyway */ }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = player.videoWidth || 1280;
+  canvas.height = player.videoHeight || 720;
+  const ctx = canvas.getContext('2d');
+
+  const canvasStream = canvas.captureStream(30);
+  let audioTracks = [];
+  try {
+    const srcStream = player.captureStream ? player.captureStream() : player.mozCaptureStream();
+    audioTracks = srcStream.getAudioTracks();
+  } catch (e) { /* no audio track available, continue video-only */ }
+
+  const combined = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+
+  let mimeType = 'video/webm;codecs=vp9,opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+  const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 5_000_000 });
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  const stopped = new Promise(resolve => { recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType })); });
+
+  await new Promise(resolve => {
+    player.currentTime = 0;
+    player.onseeked = resolve;
+  });
+  player.onseeked = null;
+  player.muted = true; // keep audio track flowing to the recorder without hearing it twice
+
+  let raf;
+  function drawFrame(){
+    if (player.paused || player.ended) return;
+    ctx.drawImage(player, 0, 0, canvas.width, canvas.height);
+    const t = player.currentTime;
+    const active = cues.find(c => t >= c.start && t <= c.end);
+    if (active) drawSubtitleOnCanvas(ctx, canvas.width, canvas.height, active.text);
+
+    if (player.duration){
+      const pct = Math.min(100, Math.round((t / player.duration) * 100));
+      burnProgressBar.style.width = pct + '%';
+      burnProgressLabel.textContent = `Merekam… ${pct}% (${formatClock(t)} / ${formatClock(player.duration)})`;
+    }
+    raf = requestAnimationFrame(drawFrame);
+  }
+
+  recorder.start();
+  await player.play();
+  raf = requestAnimationFrame(drawFrame);
+
+  await new Promise(resolve => { player.onended = resolve; });
+  player.onended = null;
+  cancelAnimationFrame(raf);
+  recorder.stop();
+  player.muted = false;
+
+  const blob = await stopped;
+  burnProgressBar.style.width = '100%';
+  burnProgressLabel.textContent = 'Selesai — mengunduh file…';
+  download('video-with-subtitle.webm', blob);
+
+  burnInBtn.disabled = false;
+  setTimeout(() => burnProgressWrap.classList.remove('show'), 3000);
+});
+</script>
+</body>
+</html>
