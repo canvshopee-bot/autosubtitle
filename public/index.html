@@ -148,6 +148,27 @@
   .stat-row{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted);}
   .stat-row b{color:var(--text); font-family:var(--mono); font-weight:500;}
 
+  /* synced subtitle timeline under the video */
+  .timeline-wrap{
+    display:none; overflow-x:auto; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel-2); padding:10px 0;
+  }
+  .timeline-wrap.show{display:block;}
+  .timeline-track{position:relative; height:46px;}
+  .timeline-cue{
+    position:absolute; top:6px; height:34px; min-width:26px;
+    background:#6C5CE7; border:1px solid #8577f0; border-radius:6px;
+    color:#fff; font-size:11.5px; font-weight:500; line-height:1.25;
+    padding:4px 7px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+    cursor:pointer; transition:background .12s;
+  }
+  .timeline-cue:hover{background:#7A6BF0;}
+  .timeline-cue.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
+  .timeline-playhead{
+    position:absolute; top:0; bottom:0; width:2px; background:var(--accent);
+    box-shadow:0 0 6px rgba(242,194,48,.7); pointer-events:none;
+  }
+
   /* caption style picker */
   .style-grid{
     display:grid; grid-template-columns:1fr 1fr; gap:10px;
@@ -209,6 +230,12 @@
           </select>
         </div>
         <button class="btn primary" id="generateBtn">Buat subtitle</button>
+      </div>
+
+      <div class="timeline-wrap" id="timelineWrap">
+        <div class="timeline-track" id="timelineTrack">
+          <div class="timeline-playhead" id="timelinePlayhead" style="left:0;"></div>
+        </div>
       </div>
 
       <div class="progress-wrap" id="progressWrap">
@@ -301,6 +328,10 @@ const burnProgressBar   = document.getElementById('burnProgressBar');
 const burnProgressLabel = document.getElementById('burnProgressLabel');
 const styleBlock = document.getElementById('styleBlock');
 const styleGrid  = document.getElementById('styleGrid');
+const timelineWrap = document.getElementById('timelineWrap');
+const timelineTrack = document.getElementById('timelineTrack');
+const timelinePlayhead = document.getElementById('timelinePlayhead');
+const PX_PER_SEC = 60;
 
 let cues = []; // {start, end, text}
 let currentFile = null;
@@ -426,6 +457,7 @@ player.addEventListener('timeupdate', () => {
   document.querySelectorAll('.cue').forEach((el,i) => {
     el.classList.toggle('active', cues[i] === active);
   });
+  updatePlayhead();
 });
 
 // ---------- transcription ----------
@@ -520,13 +552,51 @@ async function extractAudio(file){
 }
 
 // ---------- cue list rendering ----------
-function renderCues(){
+function renderTimeline(){
+  if (cues.length === 0){
+    timelineWrap.classList.remove('show');
+    return;
+  }
+  timelineWrap.classList.add('show');
+
+  const duration = player.duration || Math.max(...cues.map(c => c.end), 1);
+  timelineTrack.style.width = Math.max(duration * PX_PER_SEC, 200) + 'px';
+
+  timelineTrack.querySelectorAll('.timeline-cue').forEach(el => el.remove());
+
+  cues.forEach((cue, idx) => {
+    const block = document.createElement('div');
+    block.className = 'timeline-cue';
+    block.dataset.idx = idx;
+    block.style.left = (cue.start * PX_PER_SEC) + 'px';
+    block.style.width = Math.max((cue.end - cue.start) * PX_PER_SEC - 3, 22) + 'px';
+    block.textContent = cue.text;
+    block.title = cue.text;
+    block.addEventListener('click', () => {
+      player.currentTime = cue.start;
+      if (player.paused) player.play();
+    });
+    timelineTrack.appendChild(block);
+  });
+
+  timelineTrack.appendChild(timelinePlayhead);
+}
+
+function updatePlayhead(){
+  const t = player.currentTime;
+  timelinePlayhead.style.left = (t * PX_PER_SEC) + 'px';
+  timelineTrack.querySelectorAll('.timeline-cue').forEach(el => {
+    const cue = cues[+el.dataset.idx];
+    el.classList.toggle('active', cue && t >= cue.start && t <= cue.end);
+  });
+}
   subList.innerHTML = '';
   if (cues.length === 0){
     subList.appendChild(emptyState);
     exportRow.style.display = 'none';
     burnBlock.style.display = 'none';
     styleBlock.style.display = 'none';
+    timelineWrap.classList.remove('show');
     return;
   }
   exportRow.style.display = 'flex';
@@ -581,6 +651,8 @@ function renderCues(){
       renderCues();
     });
   });
+
+  renderTimeline();
 }
 
 addCueBtn.addEventListener('click', () => {
