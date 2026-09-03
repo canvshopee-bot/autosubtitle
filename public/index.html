@@ -43,13 +43,13 @@
   header.top p{margin:0; color:var(--muted); font-size:13.5px; max-width:420px; line-height:1.5;}
 
   .grid{
-    display:grid; grid-template-columns: 1.15fr 1fr; gap:20px;
+    display:grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap:20px;
   }
-  @media (max-width:920px){ .grid{grid-template-columns:1fr;} }
+  @media (max-width:920px){ .grid{grid-template-columns:minmax(0,1fr);} }
 
   .panel{
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:18px; display:flex; flex-direction:column; gap:14px;
+    padding:18px; display:flex; flex-direction:column; gap:14px; min-width:0;
   }
 
   .panel h2{font-size:12.5px; text-transform:none; letter-spacing:.01em; margin:0; color:var(--muted); font-weight:500;}
